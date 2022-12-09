@@ -1,0 +1,375 @@
+---
+title: "Case Study 2 DDS"
+author: "Garrett Drake"
+date: "`r Sys.Date()`"
+output: html_document
+
+---
+
+## This is a project examining a fake company, DDSAnalytics, that specializes in talent management solutions for Fortune 100 companies. We have been tasked by DDSAnalytics executive leadership to first predict employee turnover. Additionally we were tasked to predict the monthly income salary of workers from a hold out data set. K-NN, Naive Bayes, and multiple linear regression were used in the analysis and prediction.  
+  
+  
+## An explatoray analysis via of several variables in [RShiny](https://garrettdrake317.shinyapps.io/case-study-2-dds-app/). 
+  
+  
+  
+## A [youtube](https://youtu.be/sWO2Oym2RNk) link to the presentation video.  
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries
+```{r load libraries}
+# load libraries
+library(tidyverse)
+library(tidyverse)
+library(reshape2)
+library(plotly)
+library(caret)
+library(GGally)
+library(car)
+library(e1071)
+library(class)
+library(kableExtra)
+library(MASS)
+library(leaps)
+library(imbalance) # use oversample (use overtime as variable)
+library(shiny)
+```
+
+## Load data
+
+``` {r load data}
+# Load Data
+CaseStudy2Data <- read.csv("C:\\Users\\gdrak\\OneDrive\\Documents\\SMU Doing Data Science\\Unit 14-15 Project\\Case Study Full.csv", header = TRUE, stringsAsFactors = TRUE)
+
+CaseStudy2NoAttrition <- read.csv("C:\\Users\\gdrak\\OneDrive\\Documents\\SMU Doing Data Science\\Unit 14-15 Project\\CaseStudy2CompSet No Attrition USE.csv", header = TRUE)
+
+CaseStudy2CompNoSalary <- read.csv("C:\\Users\\gdrak\\OneDrive\\Documents\\SMU Doing Data Science\\Unit 14-15 Project\\Case Study No Salary.csv", header = TRUE)
+
+```
+
+
+```{r check for missing values}
+
+colSums(is.na(CaseStudy2Data)) %>%  
+  kable("html", caption = "No missing values") %>% 
+  kable_styling()
+```
+
+
+## Data exploration and visualization
+```{r Data exploration and visualization}
+
+### Explore data
+table(CaseStudy2Data$Attrition) # For attrition 730 no, 140 yes, much higher percentage of no than yes so create data set that has equal number of both so use oversampling
+
+# plot data
+ggplot(CaseStudy2Data, aes(x = Attrition, fill = BusinessTravel)) + geom_bar() + 
+  facet_wrap(~BusinessTravel) +
+  ggtitle("Business Travel by Attrition")
+
+ggplot(CaseStudy2Data, aes(x = Attrition, fill = Department)) + geom_bar() +
+  facet_wrap(~Department) +
+  ggtitle("Attrition by Department")# USE highest proportion is in sales
+
+ggplot(CaseStudy2Data, aes(x = Education, fill = Attrition)) + geom_histogram()+
+  ggtitle("Attrition by Education")
+
+ggplot(CaseStudy2Data, aes(x = Age, fill = Attrition)) + geom_histogram()+
+  ggtitle("Attrition by Age") # talk about age in presentation
+
+ggplot(CaseStudy2Data, aes(x = EnvironmentSatisfaction, fill = Attrition)) +
+  geom_histogram()+
+  ggtitle("Environment Satisfaction by Attrition") # relatively equal proportion across satisfaction
+
+ggplot(CaseStudy2Data, aes(x = Gender, fill = Attrition)) + geom_bar()+
+  ggtitle("Attrition by Gender")
+
+ggplot(CaseStudy2Data, aes(x = JobInvolvement, fill = Attrition)) + geom_histogram()+
+  ggtitle("Attrition by Job Involvement") + # proportionally 1 has highest attrition, would be expected
+  xlab("Job Involvement")
+
+ggplot(CaseStudy2Data, aes(x = JobLevel, fill = Attrition)) + geom_histogram()+
+  ggtitle("Attrition by Job level")
+
+ggplot(CaseStudy2Data, aes(x = JobRole, fill = Attrition)) + 
+  theme(axis.text.x=element_text(size=rel(0.8), angle=90)) +
+  geom_bar() +
+  ggtitle("Attrition by Job Role")
+
+ggplot(CaseStudy2Data, aes(x = JobSatisfaction, fill = Attrition)) + geom_histogram() +
+  ggtitle("Attrition by Job Satisfaction") + # relatively equal across
+  xlab("Job Satisfaction")
+
+ggplot(CaseStudy2Data, aes(x = MonthlyIncome, fill = Attrition)) + geom_histogram() +
+  ggtitle("Attrition by Monthly Income") + # USE talk about this, much higher attrition with lower monthly incomes
+  xlab("Monthly Income")
+
+ggplot(CaseStudy2Data, aes(x = MonthlyRate, fill = Attrition)) + geom_histogram() +
+  ggtitle("Monthly Rate by Attrition")# relatively equal across
+
+ggplot(CaseStudy2Data, aes(x = NumCompaniesWorked, fill = Attrition)) + 
+  geom_histogram()+
+  ggtitle("Number of Companies Worked by Attrition")
+
+ggplot(CaseStudy2Data, aes(x = MaritalStatus, fill = Attrition)) +
+  geom_bar()+
+  ggtitle("Attrition by Marital Status") # divorced has really low proportion, then married, and single with highest proportion
+
+ggplot(CaseStudy2Data, aes(x = OverTime, fill = Attrition)) +
+  geom_bar()+
+  ggtitle("Attrition by Over Time") + # USE talk about overtime, much higher percentage
+  xlab("Over time")
+
+ggplot(CaseStudy2Data, aes(x = PercentSalaryHike, fill = Attrition)) + 
+  geom_histogram() +
+  ggtitle("Percent Salary Hike by Attrition")#looks like 15-18 % had highest proportion
+
+ggplot(CaseStudy2Data, aes(x = RelationshipSatisfaction, fill = Attrition)) + 
+  geom_histogram() +
+  ggtitle("Relationship Satisfaction by Attrition") # relatively equal
+
+ggplot(CaseStudy2Data, aes(x = StockOptionLevel, fill = Attrition)) + 
+  geom_histogram() +
+  ggtitle("Stock Option level by Attrition") # 2 has lowest proportion, 0 has highest number, but also most people
+
+ggplot(CaseStudy2Data, aes(x = TotalWorkingYears, fill = Attrition)) + 
+  geom_histogram() +
+  ggtitle("Total Working Years by Attrition") # USE consider talking about this, lower working year tend to have more attrition
+
+ggplot(CaseStudy2Data, aes(x = TrainingTimesLastYear, fill = Attrition)) + 
+  geom_histogram()+
+  ggtitle("Training Times Last Year by Attrition")
+
+ggplot(CaseStudy2Data, aes(x = WorkLifeBalance, fill = Attrition)) + 
+  geom_histogram() +
+  ggtitle("Work Life Balance by Attrition") # USE
+
+ggplot(CaseStudy2Data, aes(x = YearsAtCompany, fill = Attrition)) +
+  geom_histogram() +
+  ggtitle("Attrition by Years At Company") + # USE lower years tend to have higher attrition, but one outlier at 40 (maybe he/she retired?)
+  xlab("Years At Company")
+
+ggplot(CaseStudy2Data, aes(x = YearsInCurrentRole, fill = Attrition)) + 
+  geom_histogram() +
+  ggtitle("Attrition by Years In Current Role") +
+  xlab("Years In Current Role")
+
+ggplot(CaseStudy2Data, aes(x = YearsSinceLastPromotion, fill = Attrition)) + geom_histogram() +
+  ggtitle("Years Since Last Promotion by Attrition") + # relatively proportionally equal
+  xlab("Years Since Last Promotion")
+
+ggplot(CaseStudy2Data, aes(x = YearsWithCurrManager, fill = Attrition)) + 
+  geom_histogram() +
+  ggtitle("Attrition by Years With Current Manager")
+```
+
+
+## Scale data for model use
+```{r scale data for model use}
+# turn into numeric to run in knn
+case2use <- CaseStudy2Data
+case2use <- case2use[ ,-c(1,2,24, 29)]
+case2use$BusinessTravel <- as.numeric(case2use$BusinessTravel)
+case2use$Department <- as.numeric(case2use$Department)
+case2use$EducationField <- as.numeric(case2use$EducationField)
+case2use$Gender <- as.numeric(case2use$Gender)
+case2use$JobRole <- as.numeric(case2use$JobRole)
+case2use$MaritalStatus <- as.numeric(case2use$MaritalStatus)
+case2use$OverTime <- as.numeric(case2use$OverTime)
+
+
+# Scale data
+case2use$Age <- scale(case2use$Age)
+case2use$MonthlyIncome <- scale(case2use$MonthlyIncome)
+case2use$YearsAtCompany <- scale(case2use$YearsAtCompany)
+case2use$Department <- scale(case2use$Department)
+case2use$JobInvolvement <- scale(case2use$JobInvolvement)
+case2use$YearsInCurrentRole <- scale(case2use$YearsInCurrentRole)
+case2use <- oversample(case2use, method = "ADASYN", classAttr = "Attrition")
+
+```
+
+
+
+```{r set up hyper tuned KNN model}
+### Set up hyper tuned KNN Model ####
+iterations = 100
+numks <-  100
+splitPerc = .7 #Training / Test split Percentage
+masterAcc = matrix(nrow = iterations, ncol = numks)
+masterSensitivity <- matrix(nrow = iterations, ncol = numks)
+masterSpecificity <- matrix(nrow = iterations, ncol = numks)
+
+for(j in 1:iterations)
+{
+  trainIndices = sample(1:dim(case2use)[1],round(.7 * dim(case2use)[1]))
+  train = case2use[trainIndices, ]
+  test = case2use[-trainIndices, ]
+  for(i in 1:numks)
+  {
+    classifications = knn(train[,c("Age","Gender", "JobSatisfaction", "MonthlyIncome", "YearsAtCompany", "Department", "JobInvolvement", "YearsInCurrentRole")],test[,c("Age","Gender", "JobSatisfaction", "MonthlyIncome", "YearsAtCompany", "Department", "JobInvolvement", "YearsInCurrentRole"  )],train$Attrition, prob = TRUE, k = i)
+    table(classifications,test$Attrition)
+    CM = confusionMatrix(table(classifications,test$Attrition))
+    masterAcc[j,i] = CM$overall[1]
+    masterSensitivity[j,i] = CM$byClass[1]
+    masterSpecificity[j,i] = CM$byClass[2]
+  }
+  
+}
+
+
+
+MeanAcc <-  colMeans(masterAcc) # get colum means
+plot(seq(1,numks,1),MeanAcc, type = "l", xlab = "Number of Ks", ylab = "Mean Accuracy", main = "k-NN Classification Accuracy for Model predicting Attrition", col = "blue") # plot data with labels
+which.max(MeanAcc) # which K gives max percentage
+max(masterAcc) # find out max percent specificity
+
+MeanSpec <-  colMeans(masterSpecificity) # get colum means
+plot(seq(1,numks,1),MeanSpec, type = "l", xlab = "Number of Ks", ylab = "Mean Specifitity", main = "k-NN Classification Accuracy for Model predicting Attrition", col = "blue") # plot data with labels
+which.max(MeanSpec) # which K gives max percentage
+max(MeanSpec) # find out max percent specificity
+``` 
+
+## Run KNN Model
+``` {r Knn model}
+###  KNN model
+set.seed(317)
+trainIndices = sample(1:dim(case2use)[1],round(.7 * dim(case2use)[1]))
+train <- case2use[trainIndices, ]
+test <- case2use[-trainIndices, ]
+knnModel <- knn(train[,c("Age","Gender", "JobSatisfaction", "MonthlyIncome", "YearsAtCompany", "Department", "JobInvolvement", "YearsInCurrentRole", "OverTime" )],test[,c("Age","Gender", "JobSatisfaction", "MonthlyIncome", "YearsAtCompany", "Department", "JobInvolvement", "YearsInCurrentRole", "OverTime" )],train$Attrition, prob = TRUE, k = 3) # run knn test
+
+
+table(knnModel,test$Attrition) # create a table 
+confusionMatrix(table(knnModel,test$Attrition)) # run confusion matrix to get how well model predicted
+```
+
+## Create Naive Bayes Model
+```{r create Naive Bayes Model}
+set.seed(317)
+trainIndices = sample(1:dim(case2use)[1],round(.7 * dim(case2use)[1]))
+train <- case2use[trainIndices, ]
+test <- case2use[-trainIndices, ]
+nbFit <- naiveBayes(train[,c("Age","Gender", "JobSatisfaction", "MonthlyIncome", "YearsAtCompany", "Department", "JobInvolvement", "YearsInCurrentRole", "OverTime" )],train$Attrition)
+confusionMatrix(table(predict(nbFit,test[,c("Age","Gender", "JobSatisfaction", "MonthlyIncome", "YearsAtCompany", "Department", "JobInvolvement", "YearsInCurrentRole", "OverTime" )]),test$Attrition))
+
+```
+
+```{r Naive Bayes over 100 iterations}
+  ######### Naive Bayes model for predicting attrition ########
+  iterations = 100
+  masterAcc = matrix(nrow = iterations)
+  masterSensitivity <- matrix(nrow = iterations)
+  masterSpecificity <- matrix(nrow = iterations)
+  splitPerc = .7 #Training / Test split Percentage
+  for(j in 1:iterations)
+  {
+    
+    trainIndices = sample(1:dim(case2use)[1],round(.7 * dim(case2use)[1]))
+    train <- case2use[trainIndices, ]
+    test <- case2use[-trainIndices, ]
+    
+    model = naiveBayes(train[,c("Age","Gender", "JobSatisfaction", "MonthlyIncome", "YearsAtCompany", "Department", "JobInvolvement", "YearsInCurrentRole" )],train$Attrition)
+    CM = confusionMatrix(table(predict(model,test[,c("Age","Gender", "JobSatisfaction", "MonthlyIncome", "YearsAtCompany", "Department", "JobInvolvement", "YearsInCurrentRole" )]),test$Attrition))
+    masterAcc[j] = CM$overall[1]
+    masterSensitivity[j] = CM$byClass["Sensitivity"]
+    masterSpecificity[j] = CM$byClass["Specificity"]
+    
+  }
+  MeanAcc = colMeans(masterAcc)
+  MeanAcc # Print mean accuracy
+  
+  MeanSensitivity = colMeans(masterSensitivity)
+  MeanSensitivity # Print mean sensitivity
+  
+  MeanSpecificity <- colMeans(masterSpecificity)
+  MeanSpecificity # Print mean specificity
+```
+
+## Run predictions for no attrition data set
+
+```{r predict fit using best model}
+
+nbPredict <- predict(nbFit,newdata = CaseStudy2NoAttrition )
+
+# Create Data Frame with predictions
+Attrition_predictions <- data.frame(CaseStudy2NoAttrition[ ,1], nbPredict)
+names(Attrition_predictions) # get names to rename
+Attrition_predictions <- rename(Attrition_predictions, ID = CaseStudy2NoAttrition...1., Predicted_Attrition = nbPredict) # rename columns
+
+Attrition_predictions <- as.data.frame(Attrition_predictions)
+
+# save file to computer
+# write.csv(Attrition_predictions, "C:\\Users\\gdrak\\OneDrive\\Documents\\SMU Doing Data Science\\Unit 14-15 Project\\Case2PredictionsDrake Attrition.csv", row.names = FALSE)
+
+```
+
+## Print Attrition Predictions
+```{r print attrition predictions}
+print(Attrition_predictions)
+```
+
+## Explore Correlations for regression predicting income
+
+```{r Get individual correlations to narrow down variable selection for model}
+# Get individual correlations to narrow down variable selection for model
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$Age) # .484
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$Education) # .127 correlation
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$JobLevel) # .95164 correlation
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$MonthlyRate) # .0646
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$NumCompaniesWorked) # .1558
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$PercentSalaryHike) # -.0539
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$TotalWorkingYears) # .7785
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$YearsAtCompany) # .491
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$YearsInCurrentRole) # .3618
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$YearsSinceLastPromotion) # .3159
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$YearsWithCurrManager) # .3284
+CaseStudy2Data$GenderMF <- ifelse(CaseStudy2Data$Gender == "Male", 0, 1) # turn into number for correlation
+cor(CaseStudy2Data$MonthlyIncome, CaseStudy2Data$GenderMF) # .055
+```
+
+## Visually plot data
+```{r visually plot data with ggpairs with selected variables}
+ggpairs(CaseStudy2Data[ , c(3, 9, 17, 21, 22, 23, 26, 31, 34:38 )]) # look at visual of all together
+```
+
+
+## Build regression model
+```{r Build regression model}
+# 4 variables to use - job level, total working years, age/years at company, department
+fit <- lm(MonthlyIncome ~ JobLevel + TotalWorkingYears + YearsInCurrentRole + Department, data = CaseStudy2Data)
+summary(fit)
+vif(fit) # check vif for multicolinearity 
+```
+
+## Leave One Out Cross Validation model to get RMSE
+```{r Build Leave One Out Cross Validation model to get RMSE}
+set.seed(65)
+fit2 <- train(MonthlyIncome ~ JobLevel + TotalWorkingYears + YearsInCurrentRole + Department, method = "lm", data = CaseStudy2Data, trCorontol = trainControl(method = "LOOCV"))
+fit2 # LOOCV shows RMSE of 1360, which is less than $3000
+```
+
+## Get predictions for Monthly Income
+```{r Get predictions for Monthly Income}
+# Get predictions for Monthly Income
+pred_monthly_inc <- predict(fit2, CaseStudy2CompNoSalary)
+
+# Create Data Frame with predictions
+Inc_predictions <- data.frame(CaseStudy2CompNoSalary[ ,1], pred_monthly_inc)
+names(Inc_predictions) # get names to rename
+Inc_predictions <- rename(Inc_predictions, ID = CaseStudy2CompNoSalary...1., Predicted_Income = pred_monthly_inc) # rename columns
+Inc_predictions <- as.data.frame(Inc_predictions)
+```
+
+```{r print predictions}
+print(Inc_predictions)
+```
+
+## Save file to computer to upload
+```{r save file to computer}
+# Write file
+# write.csv(Inc_predictions, "C:\\Users\\gdrak\\OneDrive\\Documents\\SMU Doing Data Science\\Unit 14-15 Project\\Case2PredictionsDrake Salary.csv")
+```
